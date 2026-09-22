@@ -1,6 +1,3 @@
-# Acoustic Survey Metadata - Event Log
-The event log is a file that hosts survey-level metadata for an acoustic survey. It contains dates, time, latitudes, longitudes, and event descriptors, e.g., where, why, what of activities during the survey.  
-
 ## clean_eventlog.py
 This Python program is used to select the beginning and ending metadata for transect-based sampling. It will renumber transect numbers starting at zero. The codes for begin/start, end/stop, and resuming transects are:  
 - "begin": the beginning of a transect
