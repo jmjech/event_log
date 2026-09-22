@@ -7,7 +7,7 @@
 from pathlib import Path
 
 
-elog_fn = Path('/home/user/DX202301/event_log/DX202301_eventlog.csv')
+elog_fn = Path('/home/user/DX202301/event_log/DX202301_10-sec.csv')
 #elog_fn = Path('/home/user/DX202301/event_log/test.csv')
 with elog_fn.open() as infl:
     elog_data = infl.readlines()
@@ -32,11 +32,16 @@ for line in elog_data[1:]:
 
 # the index of the transect number
 tridx = 7
+# insert a field after the transect number indicating begin, end, ...
+eventidx = tridx+1
+# add the field heading to match the inserted column
+hdrarr = hdr.split(',')
+hdrarr.insert(eventidx, 'event_code')
+hdr = ','.join(hdrarr)
 # correct transect numbering
 # the initial transect numbers start at zero
 begin_tr_num = 0
 tr_num = 0
-#interupt_tr = 0
 for i in range(len(event_list)):
     larr = event_list[i].split(',')
     recorded_tr_num = int(larr[tridx])
@@ -46,25 +51,23 @@ for i in range(len(event_list)):
         if ('begin' in comment): 
             tr_num += 1
             begin_tr_num = tr_num
-            #print(f'begin: {begin_tr_num}, {tr_num}, {interupt_tr}')
             larr[tridx] = str(begin_tr_num)
-            #interupt_tr = 0
+            larr.insert(eventidx, 'begin')
         elif ('resume' in comment):
-            #print(f'resume: {begin_tr_num}, {tr_num}, {interupt_tr}')
             larr[tridx] = str(begin_tr_num)
+            larr.insert(eventidx, 'resume')
         elif ('start' in comment):
-            #interupt_tr += 1
             tr_num += 1
-            #print(f'start: {begin_tr_num}, {tr_num}, {interupt_tr}')
             larr[tridx] = str(tr_num)
+            larr.insert(eventidx, 'start')
     else:
         # the transect either stops or ends
         if ('stop' in comment):
-            #print(f'stop: {begin_tr_num}, {tr_num}, {interupt_tr}')
             larr[tridx] = str(tr_num)
+            larr.insert(eventidx, 'stop')
         else:
-            #print(f'end: {begin_tr_num}, {tr_num}, {interupt_tr}')
             larr[tridx] = str(begin_tr_num)
+            larr.insert(eventidx, 'end')
 
     event_list[i] = ','.join(larr)
 
