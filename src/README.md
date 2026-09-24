@@ -13,3 +13,5 @@ The "begin" & "end" pair define the full transect.
 
 The program works for one activity. TBD - fix the program for more than one activity per transect.
 
+## match_eventlog_to_shapefiles.py
+This Python program uses the data from clean_eventlog.py to label the event locations to geographic features in the shapefile. It uses pandas, geopandas, and shapely packages.
