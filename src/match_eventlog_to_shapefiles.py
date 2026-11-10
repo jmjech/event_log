@@ -11,116 +11,264 @@ import pandas as pd
 from shapely.geometry import Point
 from pathlib import Path
 
+def set_crs2_to_crs1(gdf1, gdf2):
+    '''
+    Set the CRS of the 2nd dataframe (gdf2) to the CRS of the 1st dataframe
+    (gdf1) if they do not already match
+    Input:
+      gdf1: GeoPandas' dataframe
+      gdf2: GeoPandas' dataframe
+    Return:
+      modified gdf2 if needed
+    '''
+
+    # check that both inputs are GeoPandas' dataframe
+    if not isinstance(gdf1, gpd.GeoDataFrame):
+        return None
+    if not isinstance(gdf2, gpd.GeoDataFrame):
+        return None
+
+    # compare the CRS between the geodataframes
+    if gdf2.crs != gdf1.crs:
+      gdf2 = gdf2.to_crs(gdf1.crs)
+
+    return gdf2
+
+
+def get_crs_utm(gdf):
+    '''
+    Determine the CRS that will provide accurate spatial distances based on
+    the longitude of the data. Use the GeoPandas' estimate_utm_crs() function
+    Input:
+      gdf: GeoPandas' dataframe
+    Return:
+      CRS object
+    '''
+
+    # check that the input is a GeoPandas' dataframe
+    if not isinstance(gdf, gpd.GeoDataFrame):
+        return None
+
+    return gdf.estimate_utm_crs()
+
+
+def create_columns_dictionary():
+    '''
+    Some of the BOEM shape files have similar field/column names but can have
+    different information, more fields than we want to retain, or names
+    that are confusing and ambiguous.
+    The dictionary is structured as:
+        key: code for the shapefile/data file
+        value: sub-dictionary:
+          key: original column name for those columns that we want to keep
+          value: the new column name
+    The sub-dictionary keys can be used as a list of columns to keep
+    Input:
+      none
+    Return:
+      dictionary
+    '''
+
+    # must have a "new" name as a value even if you are not renaming it. To
+    # keep the same name use the original name
+    column_dict = {'elog': 
+                    { 'date_UTC': 'date_UTC',
+                      'time_UTC': 'time_UTC',
+                      'lat_dd': 'latitude_dd',
+                      'lon_dd': 'longitude_dd',
+                      'site_code': 'site_code',
+                      'series_code': 'series_code',
+                      'transect_code': 'transect_code',
+                      'transect_number': 'transect_number',
+                      'event_code': 'event_code',
+                      'Comment': 'comment',
+                      'gis_geometry': 'gis_geometry'
+                    },
+                  'boem_lease':
+                    { 'LEASE_NUMB': 'boem_lease_code',
+                      'LEASE_TYPE': 'boem_lease_type',
+                      'RESOURCE': 'boem_lease_resource',
+                      'COMPANY': 'boem_lease_company_name',
+                      'ACRES': 'boem_lease_area_acres',
+                      'STATE': 'boem_lease_state_name',
+                      'PROTRACTIO': 'boem_lease_protraction_code',
+                      'PROTRACT_1': 'boem_lease_protraction_name',
+                      'PROJECT_NA': 'boem_lease_project_name',
+                      'geometry': 'geometry'
+                    },
+                  'boem_div1':
+                    { 'RGN_CODE': 'boem_div1_region_code',
+                      'PROT_NUM': 'boem_div1_prot_num',
+                      'PROT_NAME': 'boem_div1_prot_name',
+                      'geometry': 'geometry'
+                    },
+                  'boem_div2':
+                    { 'BLK_NUM': 'boem_div2_block_number',
+                      'TOT_AREA': 'boem_div2_block_area',
+                      'AREA_CODE': 'boem_div2_area_code',
+                      'AC_LAB': 'boem_div2_areacode_label',
+                      'geometry': 'geometry'
+                    },
+                  'boem_div3':
+                    { 'BLK_NUM': 'boem_div3_block_number',
+                      'ALQ_TOT_AR': 'boem_div3_aliquot_area',
+                      'BLKLAB': 'boem_div3_block_label',
+                      'ALQLAB': 'boem_div3_aliquot_code',
+                      'geometry': 'geometry'
+                    },
+                  'boem_wtg':
+                    { 'OBJECTID_1': 'boem_wtg_objectid_1',
+                      'Constructi': 'boem_wtg_construction',
+                      'Project': 'boem_wtg_project',
+                      'Lease_Numb': 'boem_wtg_lease_numb',
+                      'Wind_Turbi': 'boem_wtg_wind_turbine',
+                      'x': 'boem_wtg_x',
+                      'y': 'boem_wtg_y',
+                      'geometry': 'geometry'
+                    }
+                }
+    return column_dict
+
+
+def keep_columns(gdf, gdf_code, cdict):
+    '''
+    Keep specified columns
+    Input:
+      gdf: the geo-dataframe
+      gdf_code: the code for the gdf as defined by the top level code in 
+                the columns dictionary
+      columns_dict: the dictionary with the column names to keep
+    Return:
+      the modified geo-dataframe
+    '''
+
+    cols_to_keep = []
+    [cols_to_keep.append(cname) for cname in cdict[gdf_code].keys()]
+    return gdf[cols_to_keep].copy()
+
+
+def rename_columns(gdf, gdf_code, cdict):
+    '''
+    Rename specified columns
+    Input:
+      gdf: the geo-dataframe
+      gdf_code: the code for the gdf as defined by the top level code in 
+                the columns dictionary
+      columns_dict: the dictionary with the column names to rename
+    Return:
+      the modified geo-dataframe
+    '''
+
+    return gdf.rename(columns=cdict[gdf_code])
+
+
+### main
+# set parameter values
+# set the EPSG values for the GeoPandas' dataframes
+# EPSG=4326 will set the units to meters, which is used to calculate distances
+pars_dict = { 'epsg_base': 4326 }
+# maximum search distance in meters
+pars_dict['max_distance'] = 2000
+columns_dict = create_columns_dictionary()
+col_names_to_keep = []
+
 # read the data file
 datafile = Path('/home/user/DX202301/event_log/DX202301_eventlog.csv')
 elog_df = pd.read_csv(datafile)
 
+# convert the event-log data to a geopandas dataframe
+elog_df['gis_geometry'] = elog_df.apply(
+        lambda row: Point(row['lon_dd'], row['lat_dd']), axis=1 )
+elog_gdf = gpd.GeoDataFrame(elog_df, geometry='gis_geometry')
+# set the base CRS
+elog_gdf = elog_gdf.set_crs(epsg=pars_dict['epsg_base'], inplace=True)
+# keep specified columns
+elog_gdf = keep_columns(elog_gdf, 'elog', columns_dict)
+# rename specified columns
+elog_gdf = rename_columns(elog_gdf, 'elog', columns_dict)
+# keep all the event-log columns
+elog_cols_to_keep = elog_gdf.columns.tolist()
+# the global set of column names
+col_names_to_keep = elog_cols_to_keep
+
+# Set the CRS to something that is specific to the area 
+# where the data were collected. In the case of southern New England, we use
+# EPSG = 32619 but make this generic to let the data determine the CRS
+# this estimates UTM coordinates
+pars_dict['crs_nn'] = elog_gdf.estimate_utm_crs()
+pars_dict['epsg_nn'] = pars_dict['crs_nn'].to_epsg()
+
+# set a UTM CRS for the event-log points
+elog_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+# separate easting and northing from the geometry column
+elog_gdf['easting'] = round(elog_gdf.geometry.x, 1)
+elog_gdf['northing'] = round(elog_gdf.geometry.y, 1)
+
 # read the wind lease outlines shapefile
 shpfile = Path('/home/user/GIS/BOEM/Offshore_Wind_Lease_Outlines.shp')
-lease_polygons_gdf = gpd.read_file(shpfile)
+lease_gdf = gpd.read_file(shpfile)
+lease_gdf = keep_columns(lease_gdf, 'boem_lease', columns_dict)
+lease_gdf = rename_columns(lease_gdf, 'boem_lease', columns_dict)
+lease_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+# match the event-log points to the lease area polygons
+# this retains all the event-log points even if they are not in a polygon
+# points not in a polygon have NaN for the polygon data
+matched_gdf = gpd.sjoin(elog_gdf, lease_gdf, 
+                        how="left", predicate="within")
+matched_gdf.set_geometry('gis_geometry')
+matched_gdf = matched_gdf.drop(columns=['index_right'])
 
 # read the OCS 1st Division polygons
-shpfile = Path('/home/user/GIS/BOEM/OCS_Block_Polygons_1st_Division.shp')
-div1_polygons_gdf = gpd.read_file(shpfile)
+#shpfile = Path('/home/user/GIS/BOEM/OCS_Block_Polygons_1st_Division.shp')
+shpfile = Path('/home/user/GIS/BOEM/OCS_Protraction_Polygons_1st_Division_from-QGIS.shp')
+div1_gdf = gpd.read_file(shpfile)
+div1_gdf = keep_columns(div1_gdf, 'boem_div1', columns_dict)
+div1_gdf = rename_columns(div1_gdf, 'boem_div1', columns_dict)
+div1_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+matched_gdf = gpd.sjoin(matched_gdf, div1_gdf, 
+                        how="left", predicate="within")
+matched_gdf.set_geometry('gis_geometry')
+matched_gdf = matched_gdf.drop(columns=['index_right'])
 
 # read the OCS 2nd Division polygons
-# geopandas is having trouble reading this file
-#shpfile = Path('/home/user/GIS/BOEM/OCS_Block_Polygons_-_2nd_Division.shp')
-#div2_polygons_gdf = gpd.read_file(shpfile)
+shpfile = Path('/home/user/GIS/BOEM/OCS_Block_Polygons_2nd_Division_Providence.shp')
+div2_gdf = gpd.read_file(shpfile)
+div2_gdf = keep_columns(div2_gdf, 'boem_div2', columns_dict)
+div2_gdf = rename_columns(div2_gdf, 'boem_div2', columns_dict)
+div2_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+matched_gdf = gpd.sjoin(matched_gdf, div2_gdf, 
+                        how="left", predicate="within")
+matched_gdf.set_geometry('gis_geometry')
+matched_gdf = matched_gdf.drop(columns=['index_right'])
 
 # read the OCS 3rd Division polygons
 # geopandas is having trouble reading this file
 #shpfile = Path('/home/user/GIS/BOEM/OCS_Aliquot_16ths_Polygons_-_3rd_Division.shp')
-#div3_polygons_gdf = gpd.read_file(shpfile)
+shpfile = Path('/home/user/GIS/BOEM/OCS_Aliquot_16ths_Polygons_-_3rd_Division_Providence-protraction.shp')
+div3_gdf = gpd.read_file(shpfile)
+div3_gdf = keep_columns(div3_gdf, 'boem_div3', columns_dict)
+div3_gdf = rename_columns(div3_gdf, 'boem_div3', columns_dict)
+div3_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+matched_gdf = gpd.sjoin(matched_gdf, div3_gdf, 
+                        how="left", predicate="within")
+matched_gdf.set_geometry('gis_geometry')
+matched_gdf = matched_gdf.drop(columns=['index_right'])
 
 # read the WTG shapefile
 shpfile = Path('/home/user/GIS/BOEM/NOAA_Charts_WTG.shp')
-WTG_gdf = gpd.read_file(shpfile)
-
-# much of these lines comes from Gemini
-# convert the event-log data to a geopandas dataframe
-elog_df['geometry'] = elog_df.apply(
-        lambda row: Point(row['lon_dd'], row['lat_dd']), axis=1 )
-elog_points_gdf = gpd.GeoDataFrame(elog_df, geometry='geometry')
-
-# set a CRS for the event-log points; appears to be somewhat arbitrary
-elog_points_gdf.set_crs(epsg=4326, inplace=True)
-# compare the data CRS to the shapefile and change the data to the shapefile
-# if they do not match
-if elog_points_gdf.crs != lease_polygons_gdf.crs:
-  elog_points_gdf = elog_points_gdf.to_crs(lease_polygons_gdf.crs)
-
-# match the event-log points to the lease area polygons
-# this line does not retain the event-log points that are not in polygons
-#matched_gdf = gpd.sjoin(elog_points_gdf, lease_polygons_gdf, how="inner", predicate="within")
-# this does retain all the event-log points even if they are not in a polygon
-# points not in a polygon have NaN for the polygon data
-matched_gdf = gpd.sjoin(elog_points_gdf, lease_polygons_gdf, how="left", predicate="within")
-
-# keep all the event-log points columns
-keep_elog_points_col_names = elog_points_gdf.columns.tolist()
-
-# the BOEM lease area shapefiles have more fields than we want to use, so select the columns to keep
-lease_col_names = lease_polygons_gdf.columns.tolist()
-keep_lease_col_names = ['LEASE_NUMB',
-                        'PROTRACTIO',
-                        'PROJECT_NA']
-keep_col_names = keep_elog_points_col_names
-[keep_col_names.append(cname) for cname in keep_lease_col_names]
-matched_gdf = matched_gdf[keep_col_names].copy()
-
-# the 1st-division protractions are actually provided in the lease-area polygons, so we only
-# need to match those with the 1st division polygons
-# Unfortunately, the column names change among BOEM files
-# lease area protraction name = 'PROTRACTIO', 1st division protraction = 'PROT_NUM'.
-# we'll use the 1st division name and number
-matched_gdf.rename(columns = {'PROTRACTIO': 'PROT_NUM'}, inplace=True)
-# remove the old column name
-keep_col_names.remove('PROTRACTIO')
-
-# get the protraction name from the 1st division shapefile based on the protraction number
-# in the matched data frame
-# rgn_code is a broad category. A = Atlantic
-keep_1st_div_col_names = ['RGN_CODE',
-                          'PROT_NAME',
-                          'PROT_NUM']
-# there seemed to be an issue with the geometry column for the different shapefiles, so
-# remove it along with the other non-needed columns
-div1_polygons_gdf = div1_polygons_gdf[keep_1st_div_col_names].copy()
-
-# add the 1st division column names to keep to the overall keep list
-[keep_col_names.append(cname) for cname in keep_1st_div_col_names]
-# merge the data frames based on protaction name
-matched_gdf = pd.merge(matched_gdf, div1_polygons_gdf, on='PROT_NUM', how='left')
-# retain only the selected columns
-matched_gdf = matched_gdf[keep_col_names].copy()
-
-# clean up the the column names 
-# in the BOEM shapefiles rename:
-#  LEASE_NUMB to lease_number
-#  PROJECT_NA to project_name
-#  RGN_CODE to region_code
-#  PROT_NAME to protraction_name
-#  PROT_NUM to protraction_number
-matched_gdf.rename(columns = {'LEASE_NUMB': 'lease_number',
-                              'PROJECT_NA' : 'project_name',
-                              'RGN_CODE' : 'region_code',
-                              'PROT_NAME' : 'protraction_name',
-                              'PROT_NUM' : 'protraction_number'}, inplace=True)
-
+wtg_gdf = gpd.read_file(shpfile)
+wtg_gdf = keep_columns(wtg_gdf, 'boem_wtg', columns_dict)
+wtg_gdf = rename_columns(wtg_gdf, 'boem_wtg', columns_dict)
+wtg_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
 # match the nearest turbine (WTG) to each point
-# maximum distance in meters
-max_distance = 2000
-# convert the coordinate system to UTM
-matched_gdf = matched_gdf.to_crs(matched_gdf.estimate_utm_crs())
-matched_gdf.set_crs(epsg=32619, inplace=True)
-WTG_gdf = WTG_gdf.to_crs(matched_gdf.crs)
-nn_gdf = gpd.sjoin_nearest(matched_gdf, WTG_gdf, how='left', distance_col='distance',
-                           max_distance=max_distance)
+nn_gdf = gpd.sjoin_nearest(matched_gdf, wtg_gdf, how='left', 
+                           distance_col='distance_to_wtg',
+                           max_distance=pars_dict['max_distance'])
+# round the distances to one significant digit
+nn_gdf['distance_to_wtg'] = round(nn_gdf['distance_to_wtg'], 1)
+nn_gdf.drop(columns=['index_right'])
 
 # output the new data file
-ofile = Path('/home/user/DX202301/event_log/DX202301_eventlog_match-BOEM.csv')
-#matched_gdf.to_csv(ofile, index=False)
-nn_gdf.to_csv(ofile, index=False)
-
+ofile = Path('/home/user/DX202301/event_log/DX202301_eventlog_nn-BOEM.csv')
+#nn_gdf.to_csv(ofile, index=False)
 
