@@ -97,33 +97,32 @@ def create_columns_dictionary():
                       'geometry': 'geometry'
                     },
                   'boem_div1':
-                    { 'RGN_CODE': 'boem_div1_region_code',
-                      'PROT_NUM': 'boem_div1_prot_num',
-                      'PROT_NAME': 'boem_div1_prot_name',
+                    { 'RGN_CODE': 'boem_region_code',
+                      'PROT_NUM': 'boem_div1_protraction_code',
+                      'PROT_NAME': 'boem_div1_protraction_name',
                       'geometry': 'geometry'
                     },
                   'boem_div2':
-                    { 'BLK_NUM': 'boem_div2_block_number',
-                      'TOT_AREA': 'boem_div2_block_area',
-                      'AREA_CODE': 'boem_div2_area_code',
-                      'AC_LAB': 'boem_div2_areacode_label',
+                    { 'BLK_NUM': 'boem_block_number',
+                      'TOT_AREA': 'boem_block_area',
+                      'AREA_CODE': 'boem_block_code',
+                      'AC_LAB': 'boem_block_label',
                       'geometry': 'geometry'
                     },
                   'boem_div3':
-                    { 'BLK_NUM': 'boem_div3_block_number',
-                      'ALQ_TOT_AR': 'boem_div3_aliquot_area',
-                      'BLKLAB': 'boem_div3_block_label',
-                      'ALQLAB': 'boem_div3_aliquot_code',
+                    { 'ALQ_TOT_AR': 'boem_aliquot_area',
+                      'BLKLAB': 'boem_aliquot_label',
+                      'ALQLAB': 'boem_aliquot_code',
                       'geometry': 'geometry'
                     },
                   'boem_wtg':
-                    { 'OBJECTID_1': 'boem_wtg_objectid_1',
+                    { 'OBJECTID_1': 'boem_wtg_objectid',
                       'Constructi': 'boem_wtg_construction',
-                      'Project': 'boem_wtg_project',
-                      'Lease_Numb': 'boem_wtg_lease_numb',
-                      'Wind_Turbi': 'boem_wtg_wind_turbine',
-                      'x': 'boem_wtg_x',
-                      'y': 'boem_wtg_y',
+                      'Project': 'boem_wtg_project_name',
+                      'Lease_Numb': 'boem_wtg_lease_code',
+                      'Wind_Turbi': 'boem_wtg_turbine_id',
+                      'x': 'boem_wtg_longitude',
+                      'y': 'boem_wtg_latitude',
                       'geometry': 'geometry'
                     }
                 }
