@@ -84,6 +84,14 @@ def create_columns_dictionary():
                       'Comment': 'comment',
                       'gis_geometry': 'gis_geometry'
                     },
+                  'ma_state_water':
+                    { 'UNIT_NAME': 'ma_state_water',
+                      'geometry': 'geometry'
+                    },
+                  'ri_state_water':
+                    { 'Matrix': 'ri_state_water',
+                      'geometry': 'geometry'
+                    },
                   'boem_lease':
                     { 'LEASE_NUMB': 'boem_lease_code',
                       'LEASE_TYPE': 'boem_lease_type',
@@ -200,8 +208,35 @@ pars_dict['epsg_nn'] = pars_dict['crs_nn'].to_epsg()
 # set a UTM CRS for the event-log points
 elog_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
 # separate easting and northing from the geometry column
-elog_gdf['easting'] = round(elog_gdf.geometry.x, 1)
-elog_gdf['northing'] = round(elog_gdf.geometry.y, 1)
+#elog_gdf['easting'] = round(elog_gdf.geometry.x, 1)
+#elog_gdf['northing'] = round(elog_gdf.geometry.y, 1)
+
+# start with the RI and MA state waters
+# MA state waters is derived from the MA ocean sanctuaries shapefile
+shpfile = Path('/home/user/GIS/BOEM/ma_ocean_sanctuaries.shp')
+ma_gdf = gpd.read_file(shpfile)
+ma_gdf = keep_columns(ma_gdf, 'ma_state_water', columns_dict)
+ma_gdf = rename_columns(ma_gdf, 'ma_state_water', columns_dict)
+ma_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+matched_gdf = gpd.sjoin(elog_gdf, ma_gdf, 
+                        how="left", predicate="within")
+matched_gdf.set_geometry('gis_geometry')
+matched_gdf = matched_gdf.drop(columns=['index_right'])
+
+# RI state waters is derived from the RI HYDRO water use shapefile
+shpfile = Path('/home/user/GIS/BOEM/HYDRO_Water_Use_Categories_spf.shp')
+ri_gdf = gpd.read_file(shpfile)
+ri_gdf = keep_columns(ri_gdf, 'ri_state_water', columns_dict)
+ri_gdf = rename_columns(ri_gdf, 'ri_state_water', columns_dict)
+ri_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
+matched_gdf = gpd.sjoin(matched_gdf, ri_gdf, 
+                        how="left", predicate="within")
+matched_gdf.set_geometry('gis_geometry')
+matched_gdf = matched_gdf.drop(columns=['index_right'])
+# the shapefile fields are nondescriptive and ambiguous so change
+# the fieldname "water" to "ri_state_water"
+matched_gdf.loc[matched_gdf['ri_state_water'] == 'water', 
+                'ri_state_water'] = 'ri_state_water'
 
 # read the wind lease outlines shapefile
 shpfile = Path('/home/user/GIS/BOEM/Offshore_Wind_Lease_Outlines.shp')
@@ -212,7 +247,7 @@ lease_gdf.to_crs(epsg=pars_dict['epsg_nn'], inplace=True)
 # match the event-log points to the lease area polygons
 # this retains all the event-log points even if they are not in a polygon
 # points not in a polygon have NaN for the polygon data
-matched_gdf = gpd.sjoin(elog_gdf, lease_gdf, 
+matched_gdf = gpd.sjoin(matched_gdf, lease_gdf, 
                         how="left", predicate="within")
 matched_gdf.set_geometry('gis_geometry')
 matched_gdf = matched_gdf.drop(columns=['index_right'])
@@ -268,6 +303,9 @@ nn_gdf['distance_to_wtg'] = round(nn_gdf['distance_to_wtg'], 1)
 nn_gdf.drop(columns=['index_right'])
 
 # output the new data file
-ofile = Path('/home/user/DX202301/event_log/DX202301_eventlog_nn-BOEM.csv')
-#nn_gdf.to_csv(ofile, index=False)
+ofile = Path('/home/user/DX202301/event_log/DX202301_eventlog_nn-BOEM-MA-RI.csv')
+answ = input('Write the file?: [y/n]')
+if (answ == 'y'):
+    nn_gdf.to_csv(ofile, index=False)
+
 
