@@ -175,7 +175,8 @@ def rename_columns(gdf, gdf_code, cdict):
 # EPSG=4326 will set the units to meters, which is used to calculate distances
 pars_dict = { 'epsg_base': 4326 }
 # maximum search distance in meters
-pars_dict['max_distance'] = 2000
+# 1/2 nautical mile
+pars_dict['max_distance'] = int(1852/2)
 columns_dict = create_columns_dictionary()
 col_names_to_keep = []
 
@@ -300,10 +301,12 @@ nn_gdf = gpd.sjoin_nearest(matched_gdf, wtg_gdf, how='left',
                            max_distance=pars_dict['max_distance'])
 # round the distances to one significant digit
 nn_gdf['distance_to_wtg'] = round(nn_gdf['distance_to_wtg'], 1)
-nn_gdf.drop(columns=['index_right'])
+
+# drop unneeded columns
+nn_gdf = nn_gdf.drop(columns=['index_right', 'site_code', 'series_code'])
 
 # output the new data file
-ofile = Path('/home/user/DX202301/event_log/DX202301_eventlog_nn-BOEM-MA-RI.csv')
+ofile = Path('/home/user/DX202301/event_log/DX202301_eventlog_23-11-2026.csv')
 answ = input('Write the file?: [y/n]')
 if (answ == 'y'):
     nn_gdf.to_csv(ofile, index=False)
